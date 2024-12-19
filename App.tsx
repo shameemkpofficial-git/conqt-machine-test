@@ -1,118 +1,137 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, { useEffect, useState } from 'react';
+import { View, Text, Button, StyleSheet, Alert } from 'react-native';
+import AudioRecord from 'react-native-audio-record';
+import Sound from 'react-native-sound';
+import Share from 'react-native-share';
+import { WebView } from 'react-native-webview';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+const App = () => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [backgroundSound, setBackgroundSound] = useState<Sound | null>(null);
+  const [filePath, setFilePath] = useState<string | null>(null);
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+  useEffect(() => {
+    AudioRecord.init({
+      sampleRate: 44100,
+      channels: 1,
+      bitsPerSample: 16,
+      wavFile: 'recorded_audio.wav',
+    });
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+    const sound = new Sound('sample.mp3', Sound.MAIN_BUNDLE, (error) => {
+      if (error) {
+        console.error('Error loading sound:', error);
+        return;
+      }
+      console.log('Background track loaded');
+      setBackgroundSound(sound);
+    });
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+    return () => {
+      if (backgroundSound) {
+        backgroundSound.release();
+      }
+    };
+  }, []);
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const startRecordingAndPlayback = () => {
+    if (!backgroundSound) {
+      Alert.alert('Error', 'Background sound is not loaded');
+      return;
+    }
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+    backgroundSound.setNumberOfLoops(-1); 
+    backgroundSound.play((success) => {
+      if (!success) {
+        console.error('Background playback failed');
+      }
+    });
+
+    // Start recording
+    AudioRecord.start();
+    setIsRecording(true);
+    console.log('Recording started with background music');
+  };
+
+  const stopRecording = async () => {
+    if (backgroundSound) {
+      backgroundSound.stop();
+    }
+
+    const recordedFilePath = await AudioRecord.stop();
+    console.log('Recording stopped. File saved at:', recordedFilePath);
+    setIsRecording(false);
+    setFilePath(recordedFilePath);
+
+    applyPitchAdjustment(recordedFilePath);
+  };
+
+  const applyPitchAdjustment = (filePath) => {
+    const pitchAdjustmentCode = `
+      const Tone = require('tone');
+      const player = new Tone.Player("${filePath}").toDestination();
+      const pitchShift = new Tone.PitchShift({ pitch: 2 }).toDestination();
+      player.connect(pitchShift);
+      player.start();
+    `;
+
+    return (
+      <WebView
+        originWhitelist={['*']}
+        source={{ html: `<script>${pitchAdjustmentCode}</script>` }}
+        javaScriptEnabled
+      />
+    );
+  };
+
+  const shareRecordedAudio = () => {
+    if (!filePath) {
+      Alert.alert('Error', 'No recorded audio to share');
+      return;
+    }
+
+    const options = {
+      title: 'Share Audio File',
+      url: `file://${filePath}`, 
+      type: 'audio/wav', 
+      message: 'Check out this recorded audio!',
+    };
+
+    Share.open(options)
+      .then((res) => {
+        console.log('Share successful:', res);
+      })
+      .catch((error) => {
+        console.error('Error sharing file:', error);
+        Alert.alert('Error', 'Failed to share the audio file.');
+      });
   };
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <View style={styles.container}>
+      <Text style={styles.title}>Karaoke App</Text>
+      {!isRecording ? (
+        <Button title="Start Recording & Playback" onPress={startRecordingAndPlayback} />
+      ) : (
+        <Button title="Stop Recording" onPress={stopRecording} />
+      )}
+      {filePath && <Button title="Share Recorded Audio" onPress={shareRecordedAudio} />}
+    </View>
   );
-}
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
+};
 
 export default App;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+});
