@@ -1,79 +1,139 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Duet Karaoke Feature
 
-# Getting Started
+This document outlines the architecture and implementation plan for a **Duet Karaoke Feature**, allowing two users to sing together in real-time.
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+---
 
-## Step 1: Start the Metro Server
+## **Overview**
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+The duet karaoke feature enables real-time audio synchronization between two singers. Users can sing along to a shared background track while their audio is captured, mixed, and played back in perfect sync.
 
-To start Metro, run the following command from the _root_ of your React Native project:
+---
 
-```bash
-# using npm
-npm start
+## **Key Requirements**
 
-# OR using Yarn
-yarn start
+1. **Real-time Audio Synchronization**:
+   - Ensure both singers hear the combined output in sync.
+2. **Backend Integration**:
+   - Exchange audio streams and synchronization metadata between clients and the server.
+3. **Challenges and Solutions**:
+   - Address latency, echo, and bandwidth constraints.
+
+---
+
+## **Architecture**
+
+### **Flow of Data Between App and Backend**
+
+1. **Signaling**:
+   - Establish a WebRTC peer-to-peer connection via a signaling server (e.g., **Socket.IO**).
+   - Exchange session descriptions (SDPs) and ICE candidates.
+
+2. **Audio Streams**:
+   - Clients send their audio streams to a media server.
+   - The server mixes the streams in real-time.
+
+3. **Combined Output**:
+   - The mixed audio is sent back to both clients for playback.
+
+4. **Metadata**:
+   - Synchronization markers (e.g., timestamps) ensure playback alignment on both devices.
+
+---
+
+### **Sequence Diagram**
+
+```plaintext
+Client A            Signaling Server           Media Server           Client B
+   |                        |                        |                   |
+1. Start Session ---------->|                        |                   |
+2. Exchange SDPs and ICE    |                        |                   |
+   Candidates (via WebRTC)  |                        |                   |
+   |------------------------|                        |                   |
+3. Send Audio Stream -------------------------------->                   |
+   |                                                 |                   |
+   |<------------------------- Combined Audio Stream --------------------|
+   |                                                 |                   |
+4. Receive and Play Audio                                                 |
 ```
 
-## Step 2: Start your Application
+---
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+## **Key Tools and Libraries**
 
-### For Android
+### **Frontend (App)**
+- **WebRTC**: For peer-to-peer audio streaming.
+- **Tone.js**: For audio effects and client-side mixing (if needed).
+- **React Native Sound**: For background music playback.
 
-```bash
-# using npm
-npm run android
+### **Backend**
+- **Kurento Media Server**: For real-time audio mixing.
+- **Janus Gateway**: Lightweight WebRTC server with audio mixing capabilities.
+- **Node.js** with **Socket.IO**: For signaling and session management.
 
-# OR using Yarn
-yarn android
-```
+---
 
-### For iOS
+## **Challenges and Solutions**
 
-```bash
-# using npm
-npm run ios
+### **1. Latency**
+- **Problem**: Network delays can cause audio streams to be out of sync.
+- **Solution**:
+  - Use **RTP (Real-Time Protocol)** with WebRTC for low-latency transmission.
+  - Implement buffering and timestamps to align streams on the client side.
 
-# OR using Yarn
-yarn ios
-```
+### **2. Echo**
+- **Problem**: The microphone may pick up the speaker output, creating an echo.
+- **Solution**:
+  - Enable **echo cancellation** and **noise suppression** in WebRTC.
+  - Use high-quality headsets or earbuds.
 
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
+### **3. Bandwidth Management**
+- **Problem**: High-quality audio streams may exceed bandwidth limits.
+- **Solution**:
+  - Use **adaptive bitrate streaming** in WebRTC to adjust quality based on network conditions.
+  - Compress audio using efficient codecs like **Opus**.
 
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
+### **4. Audio Mixing**
+- **Problem**: Combining multiple audio streams in real-time without distortion.
+- **Solution**:
+  - Use a media server like **Kurento** or **Janus** for audio mixing.
+  - Alternatively, perform client-side mixing using libraries like **Tone.js**.
 
-## Step 3: Modifying your App
+---
 
-Now that you have successfully run the app, let's modify it.
+## **Implementation Steps**
 
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
+### **1. Establish WebRTC Connection**
+- Use a signaling server to exchange SDP and ICE candidates between clients.
+- Establish a peer-to-peer WebRTC connection for audio streaming.
 
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
+### **2. Audio Capture and Streaming**
+- Capture audio from the device microphone using WebRTC APIs.
+- Stream audio to the media server for mixing.
 
-## Congratulations! :tada:
+### **3. Audio Mixing**
+- Mix the audio streams from both clients on the media server (or optionally on the client side).
+- Apply effects like pitch correction or reverb if needed.
 
-You've successfully run and modified your React Native App. :partying_face:
+### **4. Combined Output and Playback**
+- Send the mixed audio back to both clients.
+- Use synchronization markers (e.g., timestamps) to ensure playback is aligned.
 
-### Now what?
+---
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
+## **Summary**
 
-# Troubleshooting
+1. **Data Flow**:
+   - Real-time audio streams flow from clients to the media server and back.
+   - Metadata ensures synchronization.
 
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+2. **Tools**:
+   - WebRTC, Kurento/Janus, and Socket.IO for real-time collaboration.
 
-# Learn More
+3. **Challenges**:
+   - Latency, echo, and bandwidth are mitigated with advanced codecs, echo cancellation, and adaptive streaming.
 
-To learn more about React Native, take a look at the following resources:
+4. **Scalability**:
+   - Use media servers like **Kurento** or **Janus** to handle large-scale duet sessions efficiently.
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+This architecture ensures seamless real-time audio synchronization, providing an engaging duet karaoke experience.
